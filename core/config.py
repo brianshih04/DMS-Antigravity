@@ -1,6 +1,7 @@
 """Core configuration loader — singleton with hot-reload support."""
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 from PySide6.QtCore import QObject, Signal
+
+log = logging.getLogger(__name__)
 
 # Load .env at import time (no-op if file absent)
 load_dotenv(Path(__file__).parent.parent / ".env", override=False)
@@ -87,6 +90,12 @@ class Config:
                 node[part] = {}
             node = node[part]
         node[parts[-1]] = value
+
+    def save(self) -> None:
+        """Persist current configuration to settings.yaml file."""
+        with open(_SETTINGS_FILE, "w", encoding="utf-8") as fh:
+            yaml.safe_dump(self._data, fh, default_flow_style=False, sort_keys=False)
+        log.info("Configuration saved to %s", _SETTINGS_FILE)
 
     def all(self) -> dict[str, Any]:
         return dict(self._data)

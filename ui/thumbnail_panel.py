@@ -82,11 +82,15 @@ class ThumbnailModel(QAbstractListModel):
 
     def set_folder(self, folder: str) -> None:
         self.beginResetModel()
-        self._paths = [
-            str(Path(folder) / f)
-            for f in sorted(os.listdir(folder))
-            if Path(f).suffix.lower() in SUPPORTED_EXTS
-        ]
+        folder_path = Path(folder)
+        if folder_path.exists():
+            self._paths = [
+                str(folder_path / f)
+                for f in sorted(os.listdir(folder_path))
+                if Path(f).suffix.lower() in SUPPORTED_EXTS
+            ]
+        else:
+            self._paths = []
         self.endResetModel()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:

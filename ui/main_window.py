@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (
 
 from core.config import Config
 from core.signals import AppSignals
-from ui.folder_panel import FolderPanel
 from ui.thumbnail_panel import ThumbnailPanel
+from ui.watched_folder_panel import WatchedFolderPanel
 from watcher.processing_queue import ProcessingQueue
 from watcher.watch_manager import WatchManager
 
@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.resize(w, h)
 
         # ── Central widget: splitter ───────────────────────────────────────
-        self._folder_panel = FolderPanel(self)
+        self._folder_panel = WatchedFolderPanel(self)
         self._thumb_panel = ThumbnailPanel(self)
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -69,6 +69,7 @@ class MainWindow(QMainWindow):
         self._proc_queue = ProcessingQueue()
         self._folder_panel.set_watch_manager(self._watch_manager)
         self._start_watchers()
+        self._folder_panel.refresh_folder_list()
 
         # ── Signal connections ─────────────────────────────────────────────
         self._folder_panel.folder_selected.connect(self._thumb_panel.load_folder)
@@ -105,11 +106,6 @@ class MainWindow(QMainWindow):
         act_add_watch.setToolTip("Add a folder to the watch pipeline")
         act_add_watch.triggered.connect(self._add_watch_folder_dialog)
         tb.addAction(act_add_watch)
-
-        act_show_watched = QAction("📋 Show Watched Folders", self)
-        act_show_watched.setToolTip("Show currently watched folders")
-        act_show_watched.triggered.connect(self._show_watched_folders)
-        tb.addAction(act_show_watched)
 
         tb.addSeparator()
 
@@ -187,7 +183,35 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Watch Folder")
         if folder:
             self._watch_manager.add_folder(folder)
+            self._save_watch_folders_to_config()
+            self._folder_panel.refresh_folder_list()
             self._signals.status_message.emit(f"Now watching: {folder}")
+
+    def _save_watch_folders_to_config(self) -> None:
+        """Save current watched folders to config and persist to disk."""
+        watched = self._watch_manager.watched_folders
+        watch_list = []
+
+        for folder in watched:
+            # Preserve existing config entries if they exist
+            existing_entry = None
+            current_watch_list = self._cfg.get("watch_folders", [])
+            for entry in current_watch_list:
+                if isinstance(entry, dict) and entry.get("path") == folder:
+                    existing_entry = entry
+                    break
+
+            if existing_entry:
+                watch_list.append(existing_entry)
+            else:
+                watch_list.append({
+                    "path": folder,
+                    "recursive": False,
+                    "auto_create": True
+                })
+
+        self._cfg.set("watch_folders", watch_list)
+        self._cfg.save()
 
     def _ocr_current_folder(self) -> None:
         model = self._thumb_panel._model  # type: ignore[attr-defined]
@@ -207,6 +231,8 @@ class MainWindow(QMainWindow):
         )
         if folder:
             self._cfg.set("output.ocr_output_dir", folder)
+            self._cfg.save()
+            self._folder_panel.refresh_folder_list()
             self._signals.status_message.emit(f"OCR output folder set to: {folder}")
             log.info("OCR output folder updated to: %s", folder)
 
@@ -240,6 +266,7 @@ class MainWindow(QMainWindow):
                     return
         
         self._cfg.set("ocr.mode", new_mode)
+        self._cfg.save()
         log.info(f"UI changed OCR engine mode to: {new_mode}")
         self._signals.status_message.emit(f"OCR Mode set to: {new_mode.upper()}")
 
@@ -270,32 +297,6 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return input_field.text().strip()
         return None
-
-    def _show_watched_folders(self) -> None:
-        """Display a dialog showing all currently watched folders."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Watched Folders")
-        dialog.setMinimumWidth(500)
-        
-        layout = QVBoxLayout(dialog)
-        
-        folders = self._watch_manager.watched_folders
-        if folders:
-            label = QLabel("Currently watched folders:")
-            layout.addWidget(label)
-            
-            folder_list = QLabel("\n".join(f"• {f}" for f in folders))
-            folder_list.setStyleSheet("font-family: monospace; padding: 10px;")
-            layout.addWidget(folder_list)
-        else:
-            label = QLabel("No folders are currently being watched.")
-            layout.addWidget(label)
-        
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.accepted.connect(dialog.accept)
-        layout.addWidget(buttons)
-        
-        dialog.exec()
 
     def _toggle_theme(self) -> None:
         from ui.styles import DARK_THEME, LIGHT_THEME
