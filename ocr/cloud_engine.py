@@ -83,6 +83,10 @@ class ZhipuCloudEngine(BaseOCREngine):
 
         b64, img_w, img_h = _encode_image(image_path, self._max_side, self._quality)
 
+        # GLM-OCR requires specific short prompts. Fallback to full JSON prompt for older models.
+        is_glm_ocr = "glm-ocr" in self._model.lower()
+        prompt_text = "Text Recognition:" if is_glm_ocr else _OCR_PROMPT
+
         from typing import Any
         payload: dict[str, Any] = {
             "model": self._model,
@@ -90,11 +94,11 @@ class ZhipuCloudEngine(BaseOCREngine):
                 {
                     "role": "user",
                     "content": [
+                        {"type": "text", "text": prompt_text},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
                         },
-                        {"type": "text", "text": _OCR_PROMPT},
                     ],
                 }
             ],
@@ -147,14 +151,21 @@ class ZhipuCloudEngine(BaseOCREngine):
     def _parse_response(body: dict, img_w: int, img_h: int) -> OcrResult:
         try:
             content: str = body["choices"][0]["message"]["content"]
-            # Strip markdown code fences if present
-            content = content.strip()
-            if content.startswith("```"):
-                content = "\n".join(content.split("\n")[1:-1])
-            data: dict = json.loads(content)
-        except (KeyError, json.JSONDecodeError) as exc:
-            log.error("Failed to parse GLM response: %s", exc)
-            data = {}
+        except KeyError as exc:
+            log.error("Invalid response body from API, missing choices/message/content: %s", exc)
+            return OcrResult("", [], {}, body, "ZhipuCloud", img_w, img_h)
+
+        # Try to parse as JSON first for older models that we prompted for JSON
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            cleaned = "\n".join(cleaned.split("\n")[1:-1])
+        
+        try:
+            data: dict = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # If it's not valid JSON, it's likely raw text/markdown from the GLM-OCR native prompt
+            log.debug("Response is not JSON, treating as raw text.")
+            data = {"full_text": content}
 
         boxes = [
             BoundingBox(
