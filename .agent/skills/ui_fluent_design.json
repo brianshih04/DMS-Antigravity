@@ -1,0 +1,71 @@
+{
+  "skill_name": "ui_fluent_design",
+  "version": "1.0.0",
+  "description": "Windows 11 Fluent Design rendering specification and QSS stylesheets for PySide6 applications.",
+  "design_tokens": {
+    "color_palette": {
+      "accent_default":    "#0078D4",
+      "accent_light1":     "#1A90E8",
+      "accent_light2":     "#4AABF5",
+      "accent_dark1":      "#005FA3",
+      "accent_dark2":      "#004A80",
+      "background_base":   "#202020",
+      "background_layer":  "#2C2C2C",
+      "background_card":   "#323232",
+      "surface_stroke":    "#FFFFFF1A",
+      "text_primary":      "#FFFFFF",
+      "text_secondary":    "#FFFFFFAA",
+      "text_disabled":     "#FFFFFF55",
+      "fill_subtle":       "#FFFFFF0D",
+      "fill_secondary":    "#FFFFFF18",
+      "fill_control_hover":"#FFFFFF24",
+      "fill_control_press":"#FFFFFF08",
+      "danger":            "#C42B1C",
+      "warning":           "#FCE100",
+      "success":           "#0F7B0F"
+    },
+    "typography": {
+      "font_family":       "Segoe UI Variable, Segoe UI, sans-serif",
+      "display_size":      "40px",
+      "title_large":       "28px",
+      "title":             "20px",
+      "subtitle":          "16px",
+      "body":              "14px",
+      "body_strong":       "14px",
+      "caption":           "12px",
+      "font_weight_normal": 400,
+      "font_weight_medium": 500,
+      "font_weight_semibold": 600
+    },
+    "geometry": {
+      "corner_radius_sm":  "4px",
+      "corner_radius_md":  "8px",
+      "corner_radius_lg":  "12px",
+      "splitter_width":    "6px",
+      "toolbar_height":    "48px",
+      "statusbar_height":  "28px",
+      "thumbnail_size":    "120px",
+      "thumbnail_spacing": "8px"
+    },
+    "animation": {
+      "duration_fast":     "100ms",
+      "duration_normal":   "200ms",
+      "duration_slow":     "300ms",
+      "easing":            "cubic-bezier(0.0, 0.0, 0.2, 1)"
+    }
+  },
+  "qss_templates": {
+    "global_dark": "QMainWindow, QWidget { background-color: #202020; color: #FFFFFF; font-family: 'Segoe UI Variable'; font-size: 14px; } QToolBar { background-color: #2C2C2C; border-bottom: 1px solid #FFFFFF1A; padding: 4px; spacing: 4px; } QToolButton { background-color: transparent; border-radius: 6px; padding: 6px 10px; color: #FFFFFF; } QToolButton:hover { background-color: #FFFFFF24; } QToolButton:pressed { background-color: #FFFFFF08; } QStatusBar { background-color: #1A1A1A; color: #FFFFFFAA; border-top: 1px solid #FFFFFF1A; } QSplitter::handle { background-color: #FFFFFF1A; width: 2px; } QSplitter::handle:hover { background-color: #0078D4; } QTreeView { background-color: #202020; border: none; outline: none; show-decoration-selected: 1; } QTreeView::item { padding: 4px 8px; border-radius: 4px; } QTreeView::item:hover { background-color: #FFFFFF0D; } QTreeView::item:selected { background-color: #0078D430; color: #FFFFFF; } QListView { background-color: #202020; border: none; } QListView::item { border-radius: 8px; } QListView::item:hover { background-color: #FFFFFF18; } QListView::item:selected { background-color: #0078D440; } QScrollBar:vertical { background-color: transparent; width: 8px; border-radius: 4px; } QScrollBar::handle:vertical { background-color: #FFFFFF55; border-radius: 4px; min-height: 24px; } QScrollBar::handle:vertical:hover { background-color: #FFFFFFAA; } QScrollBar::add-line, QScrollBar::sub-line { height: 0px; } QMenu { background-color: #2C2C2C; border: 1px solid #FFFFFF1A; border-radius: 8px; padding: 4px; } QMenu::item { padding: 6px 16px; border-radius: 4px; } QMenu::item:selected { background-color: #FFFFFF18; } QPushButton { background-color: #0078D4; color: white; border: none; border-radius: 6px; padding: 6px 16px; font-size: 14px; } QPushButton:hover { background-color: #1A90E8; } QPushButton:pressed { background-color: #005FA3; } QPushButton.secondary { background-color: #FFFFFF18; color: #FFFFFF; } QPushButton.secondary:hover { background-color: #FFFFFF24; } QProgressBar { background-color: #FFFFFF18; border-radius: 2px; height: 4px; text-align: center; } QProgressBar::chunk { background-color: #0078D4; border-radius: 2px; }",
+    "global_light": "QMainWindow, QWidget { background-color: #F3F3F3; color: #000000; font-family: 'Segoe UI Variable'; font-size: 14px; } QToolBar { background-color: #FFFFFF; border-bottom: 1px solid #0000001A; } QTreeView::item:selected { background-color: #0078D430; } QListView::item:selected { background-color: #0078D440; }"
+  },
+  "mica_simulation": {
+    "note": "True Mica requires DWM API (Windows 11). In PySide6, simulate with a semi-transparent QGraphicsBlurEffect on a frozen desktop screenshot as background layer, or use a fixed dark-glass gradient.",
+    "fallback_gradient": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2C2C2C, stop:1 #1A1A1A)"
+  },
+  "icon_guidelines": {
+    "source": "Segoe Fluent Icons (font-face) or SVG icons from the Windows 11 icon pack",
+    "size_toolbar": "20px",
+    "size_context_menu": "16px",
+    "render": "QIcon from QPixmap with device-pixel-ratio support for HiDPI"
+  }
+}

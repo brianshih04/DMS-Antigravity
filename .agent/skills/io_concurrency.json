@@ -1,0 +1,91 @@
+{
+  "skill_name": "io_concurrency",
+  "version": "1.0.0",
+  "description": "File I/O stabilization, QThreadPool worker patterns, watchdog observer lifecycle, and thread-safety for PySide6 signals.",
+  "file_stabilizer": {
+    "algorithm": "Size+mtime polling",
+    "poll_interval_ms": 250,
+    "stable_count_required": 2,
+    "pseudocode": [
+      "prev_size, prev_mtime = -1, -1",
+      "stable_count = 0",
+      "while True:",
+      "  try: stat = os.stat(path)",
+      "  except FileNotFoundError: break  # file moved/deleted",
+      "  size, mtime = stat.st_size, stat.st_mtime",
+      "  if size == prev_size and mtime == prev_mtime:",
+      "    stable_count += 1",
+      "    if stable_count >= STABLE_COUNT_REQUIRED: emit file_ready(path); break",
+      "  else:",
+      "    stable_count = 0",
+      "    prev_size, prev_mtime = size, mtime",
+      "  time.sleep(POLL_INTERVAL_MS / 1000)"
+    ],
+    "edge_cases": [
+      "Skip files that are still open by another process (try opening with exclusive lock; on Windows use msvcrt.locking).",
+      "Ignore temporary files: skip paths ending in .tmp, .part, ~.",
+      "Handle zero-byte files: require size > 0 before starting stable count."
+    ]
+  },
+  "watchdog_lifecycle": {
+    "observer_thread": "watchdog.observers.Observer runs in its own daemon thread.",
+    "event_handler": "Subclass FileSystemEventHandler; override on_created and on_moved.",
+    "start_sequence": ["handler = StabilizingHandler(queue)", "observer = Observer()", "observer.schedule(handler, path=watch_dir, recursive=False)", "observer.start()"],
+    "stop_sequence": ["observer.stop()", "observer.join()"],
+    "multi_folder": "Call observer.schedule() multiple times with different paths before start().",
+    "note": "watchdog events arrive on the Observer thread — do NOT call Qt widgets from there. Instead push to a thread-safe queue.Queue and dispatch from the main thread via QTimer.singleShot(0, process_queue)."
+  },
+  "qthreadpool_pattern": {
+    "base_worker": {
+      "inherit_from": "QRunnable",
+      "signals_class": "Must be a separate QObject subclass (QRunnable is not a QObject).",
+      "pattern": [
+        "class WorkerSignals(QObject):",
+        "  finished = Signal()",
+        "  error = Signal(tuple)  # (exc_type, exc_value, traceback_str)",
+        "  result = Signal(object)",
+        "  progress = Signal(int)",
+        "",
+        "class Worker(QRunnable):",
+        "  def __init__(self, fn, *args, **kwargs):",
+        "    super().__init__()",
+        "    self.fn = fn; self.args = args; self.kwargs = kwargs",
+        "    self.signals = WorkerSignals()",
+        "  def run(self):",
+        "    try:",
+        "      result = self.fn(*self.args, **self.kwargs)",
+        "      self.signals.result.emit(result)",
+        "    except Exception:",
+        "      self.signals.error.emit(sys.exc_info())",
+        "    finally:",
+        "      self.signals.finished.emit()"
+      ]
+    },
+    "thread_pool_config": {
+      "max_thread_count": "QThreadPool.globalInstance().setMaxThreadCount(min(4, os.cpu_count()))",
+      "auto_delete": "Set QRunnable.setAutoDelete(True) — pool manages lifetime."
+    }
+  },
+  "signals_thread_safety": {
+    "rule": "Signals connected across threads are automatically queued by Qt (Qt.QueuedConnection). Never call UI methods directly from a background thread.",
+    "explicit_queue": "Use Signal.emit() — Qt routes delivery to the receiver's thread.",
+    "mutex_use": "Use QMutex or threading.Lock for shared mutable state (e.g., processing set to prevent duplicate OCR jobs).",
+    "processing_guard": {
+      "description": "Track in-flight file paths to prevent duplicate jobs.",
+      "pattern": [
+        "self._processing = set()",
+        "self._lock = threading.Lock()",
+        "with self._lock:",
+        "  if path in self._processing: return",
+        "  self._processing.add(path)",
+        "# ... submit job ...",
+        "# On job completion: self._processing.discard(path)"
+      ]
+    }
+  },
+  "memory_management": {
+    "thumbnail_cache": "Use functools.lru_cache or a bounded dict (max 200 entries) keyed by (path, mtime) to avoid holding stale pixmaps.",
+    "pixmap_lifecycle": "QPixmap must be created on the main thread. Workers produce QImage (thread-safe) and emit it; main thread converts to QPixmap.",
+    "pdf_handles": "Always call fitz.Document.close() in a try/finally block to release file handles immediately."
+  }
+}

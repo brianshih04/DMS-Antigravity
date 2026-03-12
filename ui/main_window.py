@@ -1,0 +1,186 @@
+"""QMainWindow — application shell with Fluent Design dual-pane layout."""
+from __future__ import annotations
+
+import logging
+import os
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMainWindow,
+    QProgressBar,
+    QSplitter,
+    QStatusBar,
+    QToolBar,
+    QWidget,
+)
+
+from core.config import Config
+from core.signals import AppSignals
+from ui.folder_panel import FolderPanel
+from ui.thumbnail_panel import ThumbnailPanel
+from watcher.processing_queue import ProcessingQueue
+from watcher.watch_manager import WatchManager
+
+log = logging.getLogger(__name__)
+
+
+class MainWindow(QMainWindow):
+    """Application main window — dual-pane splitter layout."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._cfg = Config.instance()
+        self._signals = AppSignals.instance()
+
+        # ── Window geometry ────────────────────────────────────────────────
+        self.setWindowTitle(self._cfg.get("ui.window_title", "DMS"))
+        w = int(self._cfg.get("ui.window_width", 1280))
+        h = int(self._cfg.get("ui.window_height", 800))
+        self.resize(w, h)
+
+        # ── Central widget: splitter ───────────────────────────────────────
+        self._folder_panel = FolderPanel(self)
+        self._thumb_panel = ThumbnailPanel(self)
+
+        self._splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        self._splitter.addWidget(self._folder_panel)
+        self._splitter.addWidget(self._thumb_panel)
+        self._splitter.setSizes([280, 900])
+        self._splitter.setChildrenCollapsible(False)
+        self.setCentralWidget(self._splitter)
+
+        # ── Toolbar ────────────────────────────────────────────────────────
+        self._build_toolbar()
+
+        # ── Status bar ─────────────────────────────────────────────────────
+        self._build_status_bar()
+
+        # ── Watch-folder pipeline ──────────────────────────────────────────
+        self._watch_manager = WatchManager()
+        self._proc_queue = ProcessingQueue()
+        self._folder_panel.set_watch_manager(self._watch_manager)
+        self._start_watchers()
+
+        # ── Signal connections ─────────────────────────────────────────────
+        self._folder_panel.folder_selected.connect(self._thumb_panel.load_folder)
+        self._signals.status_message.connect(self._status_label.setText)
+        self._signals.ocr_started.connect(
+            lambda p: self._status_label.setText(f"OCR running: {Path(p).name}")
+        )
+        self._signals.ocr_complete.connect(
+            lambda p, _: self._status_label.setText(f"OCR done: {Path(p).name}")
+        )
+        self._signals.ocr_failed.connect(
+            lambda p, err: self._status_label.setText(f"OCR error: {Path(p).name} — {err}")
+        )
+        self._signals.classification_done.connect(
+            lambda src, dst, rule: self._status_label.setText(
+                f"Classified by {rule}: {Path(src).name} → {Path(dst).name}"
+            )
+        )
+        self._signals.file_ready.connect(
+            lambda p: self._progress.setVisible(True)
+        )
+        self._signals.ocr_complete.connect(
+            lambda *_: self._progress.setVisible(False)
+        )
+
+    # ── Toolbar ────────────────────────────────────────────────────────────────
+    def _build_toolbar(self) -> None:
+        tb = QToolBar("Main Toolbar", self)
+        tb.setIconSize(QSize(20, 20))
+        tb.setMovable(False)
+        self.addToolBar(tb)
+
+        act_add_watch = QAction("📁 Add Watch Folder", self)
+        act_add_watch.setToolTip("Add a folder to the watch pipeline")
+        act_add_watch.triggered.connect(self._add_watch_folder_dialog)
+        tb.addAction(act_add_watch)
+
+        tb.addSeparator()
+
+        act_ocr_all = QAction("🔍 OCR All", self)
+        act_ocr_all.setToolTip("Run OCR on all files in the current folder")
+        act_ocr_all.triggered.connect(self._ocr_current_folder)
+        tb.addAction(act_ocr_all)
+
+        tb.addSeparator()
+
+        act_settings = QAction("⚙ Settings", self)
+        act_settings.setToolTip("Open settings")
+        act_settings.triggered.connect(self._open_settings)
+        tb.addAction(act_settings)
+
+        # Theme toggle
+        tb.addSeparator()
+        act_theme = QAction("◑ Theme", self)
+        act_theme.setToolTip("Toggle dark/light theme")
+        act_theme.triggered.connect(self._toggle_theme)
+        tb.addAction(act_theme)
+
+    # ── Status bar ─────────────────────────────────────────────────────────────
+    def _build_status_bar(self) -> None:
+        sb = QStatusBar(self)
+        self.setStatusBar(sb)
+
+        self._status_label = QLabel("Ready")
+        self._status_label.setProperty("secondary", "true")
+        sb.addWidget(self._status_label, 1)
+
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 0)  # indeterminate
+        self._progress.setFixedWidth(140)
+        self._progress.setFixedHeight(4)
+        self._progress.setVisible(False)
+        sb.addPermanentWidget(self._progress)
+
+    # ── Watchers ───────────────────────────────────────────────────────────────
+    def _start_watchers(self) -> None:
+        watch_list = self._cfg.get("watch_folders", []) or []
+        for entry in watch_list:
+            path = entry.get("path", "") if isinstance(entry, dict) else str(entry)
+            recursive = entry.get("recursive", False) if isinstance(entry, dict) else False
+            auto_create = entry.get("auto_create", True) if isinstance(entry, dict) else True
+            if auto_create:
+                Path(path).mkdir(parents=True, exist_ok=True)
+            self._watch_manager.add_folder(path, recursive=recursive)
+        self._watch_manager.start()
+
+    # ── Actions ────────────────────────────────────────────────────────────────
+    def _add_watch_folder_dialog(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        folder = QFileDialog.getExistingDirectory(self, "Select Watch Folder")
+        if folder:
+            self._watch_manager.add_folder(folder)
+            self._signals.status_message.emit(f"Now watching: {folder}")
+
+    def _ocr_current_folder(self) -> None:
+        model = self._thumb_panel._model  # type: ignore[attr-defined]
+        for i in range(model.rowCount()):
+            idx = model.index(i)
+            path = model.data(idx, Qt.ItemDataRole.UserRole)
+            if path:
+                self._signals.file_ready.emit(path)
+
+    def _open_settings(self) -> None:
+        cfg_path = Path(__file__).parent.parent / "config" / "settings.yaml"
+        import subprocess, sys
+        if sys.platform == "win32":
+            os.startfile(str(cfg_path))
+        else:
+            subprocess.Popen(["xdg-open", str(cfg_path)])
+
+    def _toggle_theme(self) -> None:
+        from ui.styles import DARK_THEME, LIGHT_THEME
+        current = QApplication.instance().styleSheet()
+        new_sheet = LIGHT_THEME if DARK_THEME in current else DARK_THEME
+        QApplication.instance().setStyleSheet(new_sheet)
+
+    # ── Lifecycle ──────────────────────────────────────────────────────────────
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._watch_manager.stop()
+        super().closeEvent(event)

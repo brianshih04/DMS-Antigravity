@@ -1,0 +1,106 @@
+{
+  "skill_name": "glm_ocr_protocol",
+  "version": "1.0.0",
+  "description": "Zhipu AI GLM-OCR (0.9B) Cloud API communication protocol and local inference JSON contract.",
+  "cloud_api": {
+    "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "model_id": "glm-4v",
+    "auth_header": "Authorization: Bearer {api_key}",
+    "content_type": "application/json",
+    "request_schema": {
+      "model": "glm-4v",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/jpeg;base64,{base64_encoded_image}"
+              }
+            },
+            {
+              "type": "text",
+              "text": "Please perform OCR on this document image. Return a JSON object with the following fields: full_text (string), bounding_boxes (array of {text, x, y, w, h, confidence}), structured_fields (object with any detected key-value pairs such as date, invoice_number, total_amount, vendor_name, stamp_detected)."
+            }
+          ]
+        }
+      ],
+      "max_tokens": 4096,
+      "temperature": 0.1
+    },
+    "response_schema": {
+      "id": "string",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "{json_string_of_ocr_result}"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": "int",
+        "completion_tokens": "int",
+        "total_tokens": "int"
+      }
+    },
+    "ocr_result_inner_schema": {
+      "full_text": "string — complete document text",
+      "bounding_boxes": [
+        {
+          "text": "string",
+          "x": "float — normalized 0-1 from left",
+          "y": "float — normalized 0-1 from top",
+          "w": "float — normalized width",
+          "h": "float — normalized height",
+          "confidence": "float 0-1"
+        }
+      ],
+      "structured_fields": {
+        "date": "string|null",
+        "invoice_number": "string|null",
+        "total_amount": "string|null",
+        "vendor_name": "string|null",
+        "stamp_detected": "boolean"
+      }
+    },
+    "error_codes": {
+      "400": "Invalid request / bad image format",
+      "401": "Authentication failure — check API key",
+      "429": "Rate limit exceeded — apply exponential backoff",
+      "500": "Server error — retry with backoff",
+      "503": "Service unavailable — retry with backoff"
+    },
+    "retry_policy": {
+      "max_retries": 4,
+      "initial_delay_seconds": 1.0,
+      "backoff_factor": 2.0,
+      "jitter": true,
+      "retryable_codes": [429, 500, 502, 503, 504]
+    }
+  },
+  "local_inference": {
+    "description": "Local vLLM or ONNX server inference endpoint. Assumes an OpenAI-compatible HTTP server running locally.",
+    "default_endpoint": "http://localhost:8000/v1/chat/completions",
+    "model_id": "zhipuai/glm-ocr-0.9b",
+    "request_schema": "Same as cloud_api.request_schema but with model set to local model_id",
+    "response_schema": "Same as cloud_api.response_schema",
+    "health_check_endpoint": "http://localhost:8000/health",
+    "health_check_timeout_seconds": 2.0,
+    "model_path_config_key": "ocr.local_model_path"
+  },
+  "image_preprocessing": {
+    "max_side_pixels": 4096,
+    "min_dpi": 150,
+    "recommended_format": "JPEG",
+    "recommended_quality": 85,
+    "note": "Use Pillow to resize and convert TIFF/BMP before base64 encoding. JPEG at 85 quality balances OCR accuracy vs. API payload size."
+  },
+  "pdf_text_overlay": {
+    "coordinate_conversion": "Multiply normalized (x,y,w,h) by actual image (width, height) to get pixel coords. PyMuPDF uses points (1 pt = 1/72 inch). Convert: pt = px * 72 / dpi.",
+    "invisible_text_flags": "fitz.TEXT_FONTSIZE set to bbox height in pts; render_mode=3 (invisible) via PDFpage.insert_textbox.",
+    "font": "helv (Helvetica) — universally available in PyMuPDF"
+  }
+}

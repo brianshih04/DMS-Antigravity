@@ -1,0 +1,69 @@
+version: "1.0"
+rules:
+
+  - id: "rule_001"
+    name: "Route Invoices"
+    priority: 10
+    enabled: true
+    condition:
+      op: AND
+      children:
+        - op: LEAF
+          namespace: attr
+          field: extension
+          operator: eq
+          value: "jpg"
+        - op: OR
+          children:
+            - op: LEAF
+              namespace: text
+              field: full_text
+              operator: regex
+              value: "invoice|INV-\\d+"
+            - op: LEAF
+              namespace: struct
+              field: invoice_number
+              operator: exists
+              value: null
+    actions:
+      - type: rename
+        rename_template: "{date}_{invoice_number}"
+      - type: move
+        target_directory: "./output/Invoices"
+
+  - id: "rule_002"
+    name: "Route Stamped Documents"
+    priority: 20
+    enabled: true
+    condition:
+      op: AND
+      children:
+        - op: LEAF
+          namespace: struct
+          field: stamp_detected
+          operator: eq
+          value: true
+        - op: NOT
+          child:
+            op: LEAF
+            namespace: attr
+            field: extension
+            operator: eq
+            value: "pdf"
+    actions:
+      - type: move
+        target_directory: "./output/Stamped"
+
+  - id: "rule_003"
+    name: "Large File Quarantine"
+    priority: 5
+    enabled: true
+    condition:
+      op: LEAF
+      namespace: attr
+      field: size_bytes
+      operator: gt
+      value: 10485760
+    actions:
+      - type: move
+        target_directory: "./output/Quarantine"

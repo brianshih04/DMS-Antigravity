@@ -1,0 +1,124 @@
+{
+  "skill_name": "rule_engine_ast",
+  "version": "1.0.0",
+  "description": "JSON/YAML rule schema, AST node types, evaluator recursion pattern, and feature namespaces for the DMS classification engine.",
+  "rule_file_schema": {
+    "format": "JSON or YAML",
+    "top_level_fields": {
+      "version": "string — schema version, e.g. '1.0'",
+      "rules": "array of RuleDefinition"
+    },
+    "rule_definition": {
+      "id": "string — unique rule identifier",
+      "name": "string — human-readable label",
+      "priority": "int — lower = higher priority (evaluated in ascending order)",
+      "enabled": "boolean",
+      "condition": "ASTNode — root of the boolean condition tree",
+      "actions": "array of ActionDefinition"
+    },
+    "action_definition": {
+      "type": "enum: rename | move | copy | tag",
+      "rename_template": "string — supports {field} interpolation from structured_fields, e.g. '{date}_{invoice_number}'",
+      "target_directory": "string — absolute or relative path"
+    }
+  },
+  "ast_node_types": {
+    "AND": {
+      "description": "All children must evaluate to true",
+      "schema": { "op": "AND", "children": ["ASTNode", "..."] }
+    },
+    "OR": {
+      "description": "At least one child must evaluate to true",
+      "schema": { "op": "OR", "children": ["ASTNode", "..."] }
+    },
+    "NOT": {
+      "description": "Single child must evaluate to false",
+      "schema": { "op": "NOT", "child": "ASTNode" }
+    },
+    "LEAF": {
+      "description": "A concrete condition evaluated against document features",
+      "schema": {
+        "op": "LEAF",
+        "namespace": "enum: attr | text | struct",
+        "field": "string — feature key within namespace",
+        "operator": "enum: eq | neq | gt | lt | gte | lte | contains | regex | exists",
+        "value": "string | number | boolean | null"
+      }
+    }
+  },
+  "feature_namespaces": {
+    "attr": {
+      "description": "File system attributes",
+      "fields": {
+        "size_bytes": "int",
+        "extension": "string — lowercase, no dot, e.g. 'jpg'",
+        "filename": "string — basename without extension",
+        "ctime_iso": "ISO 8601 string",
+        "mtime_iso": "ISO 8601 string"
+      }
+    },
+    "text": {
+      "description": "Full-text OCR output",
+      "fields": {
+        "full_text": "string — complete OCR text, used with 'contains' or 'regex' operators"
+      }
+    },
+    "struct": {
+      "description": "Structured fields extracted by GLM-OCR",
+      "fields": {
+        "date": "string|null",
+        "invoice_number": "string|null",
+        "total_amount": "string|null",
+        "vendor_name": "string|null",
+        "stamp_detected": "boolean"
+      }
+    }
+  },
+  "evaluator_pseudocode": [
+    "def evaluate(node, features) -> bool:",
+    "  op = node['op']",
+    "  if op == 'AND': return all(evaluate(c, features) for c in node['children'])",
+    "  if op == 'OR':  return any(evaluate(c, features) for c in node['children'])",
+    "  if op == 'NOT': return not evaluate(node['child'], features)",
+    "  if op == 'LEAF':",
+    "    value = features.get(node['namespace'], {}).get(node['field'])",
+    "    return apply_operator(value, node['operator'], node['value'])",
+    "  raise ValueError(f'Unknown op: {op}')",
+    "",
+    "def apply_operator(value, operator, target):",
+    "  if operator == 'eq':       return value == target",
+    "  if operator == 'neq':      return value != target",
+    "  if operator == 'gt':       return value > target",
+    "  if operator == 'lt':       return value < target",
+    "  if operator == 'gte':      return value >= target",
+    "  if operator == 'lte':      return value <= target",
+    "  if operator == 'contains': return target in str(value)",
+    "  if operator == 'regex':    return bool(re.search(target, str(value), re.IGNORECASE))",
+    "  if operator == 'exists':   return value is not None",
+    "  raise ValueError(f'Unknown operator: {operator}')"
+  ],
+  "example_rule": {
+    "id": "rule_001",
+    "name": "Route Invoices to Invoices Folder",
+    "priority": 10,
+    "enabled": true,
+    "condition": {
+      "op": "AND",
+      "children": [
+        { "op": "LEAF", "namespace": "attr", "field": "extension", "operator": "eq", "value": "jpg" },
+        {
+          "op": "OR",
+          "children": [
+            { "op": "LEAF", "namespace": "text", "field": "full_text", "operator": "regex", "value": "invoice|INV-\\d+" },
+            { "op": "LEAF", "namespace": "struct", "field": "invoice_number", "operator": "exists", "value": null }
+          ]
+        },
+        { "op": "NOT", "child": { "op": "LEAF", "namespace": "struct", "field": "stamp_detected", "operator": "eq", "value": true } }
+      ]
+    },
+    "actions": [
+      { "type": "rename", "rename_template": "{date}_{invoice_number}" },
+      { "type": "move", "target_directory": "D:/DMS/Invoices" }
+    ]
+  }
+}

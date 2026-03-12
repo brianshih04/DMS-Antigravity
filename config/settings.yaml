@@ -1,0 +1,45 @@
+version: "1.0"
+
+# ── Watch Folders ─────────────────────────────────────────────────────────────
+watch_folders:
+  - path: "./watch_inbox"
+    recursive: false
+    auto_create: true
+
+# ── OCR Settings ──────────────────────────────────────────────────────────────
+ocr:
+  mode: "auto"            # "cloud" | "local" | "auto"  (auto probes local first)
+  api_key: ""             # Set here OR via ZHIPU_API_KEY env variable / .env file
+  cloud_endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+  cloud_model: "glm-4v"
+  local_endpoint: "http://localhost:8000/v1/chat/completions"
+  local_model_path: ""    # Path to local model weights directory
+  max_image_side_px: 4096
+  jpeg_quality: 85
+  timeout_seconds: 60
+  max_retries: 4
+  retry_base_delay: 1.0
+  retry_backoff_factor: 2.0
+
+# ── Classification Rules ──────────────────────────────────────────────────────
+classification:
+  rules_file: "./config/default_rules.yaml"
+  enabled: true
+
+# ── Threading ─────────────────────────────────────────────────────────────────
+threading:
+  max_worker_threads: 4   # Set to 0 to auto-detect (min(4, cpu_count))
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+ui:
+  theme: "auto"           # "dark" | "light" | "auto" (reads Windows system preference)
+  thumbnail_size: 120
+  thumbnail_cache_max: 200
+  window_title: "DMS — Document Management System"
+  window_width: 1280
+  window_height: 800
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  searchable_pdf_suffix: "_searchable"
+  default_output_dir: "./processed"
