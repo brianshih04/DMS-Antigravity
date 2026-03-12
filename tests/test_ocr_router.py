@@ -115,8 +115,10 @@ def test_cloud_engine_raises_after_max_retries(tmp_path):
 
 # ── Local engine availability ──────────────────────────────────────────────
 
-def test_local_engine_unavailable_when_server_down():
+def test_local_engine_unavailable_without_transformers():
+    """Local engine should be unavailable if transformers is not installed."""
     from ocr.local_engine import LocalOCREngine
+    import sys
     engine = LocalOCREngine()
-    with patch("requests.get", side_effect=requests.ConnectionError("refused")):
+    with patch.dict(sys.modules, {"transformers": None, "torch": None}):
         assert engine.is_available() is False
