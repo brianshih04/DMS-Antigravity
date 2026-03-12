@@ -25,6 +25,9 @@ from PySide6.QtWidgets import (
 from core.config import Config
 from core.signals import AppSignals
 
+# Supported file extensions for thumbnail display
+SUPPORTED_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".pdf"}
+
 
 class WatchedFolderPanel(QWidget):
     """Left-pane panel showing watched folders and their contents.
@@ -176,6 +179,10 @@ class WatchedFolderPanel(QWidget):
                     dir_count += 1
                 else:
                     ext = path.suffix.lower()
+                    # Only show files with supported extensions
+                    if ext not in SUPPORTED_EXTS:
+                        continue
+                    
                     icon = "📄"
                     if ext in {".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".png"}:
                         icon = "🖼️"
