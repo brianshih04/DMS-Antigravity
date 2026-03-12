@@ -78,5 +78,15 @@ class Config:
     def __getitem__(self, key: str) -> Any:
         return self._data[key]
 
+    def set(self, key_path: str, value: Any) -> None:
+        """Set a value using dot notation (doesn't persist to disk)."""
+        parts = key_path.split(".")
+        node = self._data
+        for part in parts[:-1]:
+            if part not in node:
+                node[part] = {}
+            node = node[part]
+        node[parts[-1]] = value
+
     def all(self) -> dict[str, Any]:
         return dict(self._data)

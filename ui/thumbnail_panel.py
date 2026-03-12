@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -177,6 +179,7 @@ class ThumbnailPanel(DragDropHandler, QListView):
         self.setUniformItemSizes(True)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._context_menu)
+        self.doubleClicked.connect(self._on_double_clicked)
 
         self._init_drag_drop()
 
@@ -242,6 +245,19 @@ class ThumbnailPanel(DragDropHandler, QListView):
 
     def _run_ocr(self, path: str) -> None:
         self._signals.file_ready.emit(path)
+
+    def _on_double_clicked(self, index: QModelIndex) -> None:
+        """Open file with default application when double-clicked."""
+        path: str | None = self._model.data(index, Qt.ItemDataRole.UserRole)
+        if path:
+            file_path = Path(path)
+            if sys.platform == "win32":
+                os.startfile(str(file_path))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(file_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(file_path)])
+            self._signals.status_message.emit(f"Opened: {file_path.name}")
 
     # ── Folder tracking ────────────────────────────────────────────────────
     _current_folder: str = ""

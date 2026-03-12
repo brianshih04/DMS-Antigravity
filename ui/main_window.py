@@ -9,12 +9,16 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QProgressBar,
     QSplitter,
     QStatusBar,
     QToolBar,
+    QVBoxLayout,
     QWidget,
     QComboBox,
 )
@@ -101,6 +105,11 @@ class MainWindow(QMainWindow):
         act_add_watch.setToolTip("Add a folder to the watch pipeline")
         act_add_watch.triggered.connect(self._add_watch_folder_dialog)
         tb.addAction(act_add_watch)
+
+        act_show_watched = QAction("📋 Show Watched Folders", self)
+        act_show_watched.setToolTip("Show currently watched folders")
+        act_show_watched.triggered.connect(self._show_watched_folders)
+        tb.addAction(act_show_watched)
 
         tb.addSeparator()
 
@@ -195,9 +204,80 @@ class MainWindow(QMainWindow):
         """Update the configuration dynamically from the UI combo box."""
         mode_map = {0: "auto", 1: "cloud", 2: "local"}
         new_mode = mode_map.get(idx, "auto")
+        
+        # If switching to cloud mode, prompt for API key if not set
+        if new_mode == "cloud":
+            current_key = self._cfg.get("ocr.api_key", "")
+            if not current_key or current_key == "${ZHIPU_API_KEY}":
+                api_key = self._prompt_api_key()
+                if api_key:
+                    self._cfg.set("ocr.api_key", api_key)
+                    log.info("API key saved to configuration")
+                else:
+                    # User cancelled, revert to auto mode
+                    self._engine_combo.blockSignals(True)
+                    self._engine_combo.setCurrentIndex(0)
+                    self._engine_combo.blockSignals(False)
+                    self._signals.status_message.emit("Cloud OCR cancelled - API key required")
+                    return
+        
         self._cfg.set("ocr.mode", new_mode)
         log.info(f"UI changed OCR engine mode to: {new_mode}")
         self._signals.status_message.emit(f"OCR Mode set to: {new_mode.upper()}")
+
+    def _prompt_api_key(self) -> str | None:
+        """Prompt user for Zhipu API key using a dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Cloud OCR - API Key Required")
+        dialog.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(dialog)
+        
+        label = QLabel("Enter your Zhipu API Key for Cloud OCR:")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        
+        input_field = QLineEdit()
+        input_field.setEchoMode(QLineEdit.EchoMode.Password)
+        input_field.setPlaceholderText("Enter API key...")
+        layout.addWidget(input_field)
+        
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            return input_field.text().strip()
+        return None
+
+    def _show_watched_folders(self) -> None:
+        """Display a dialog showing all currently watched folders."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Watched Folders")
+        dialog.setMinimumWidth(500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        folders = self._watch_manager.watched_folders
+        if folders:
+            label = QLabel("Currently watched folders:")
+            layout.addWidget(label)
+            
+            folder_list = QLabel("\n".join(f"• {f}" for f in folders))
+            folder_list.setStyleSheet("font-family: monospace; padding: 10px;")
+            layout.addWidget(folder_list)
+        else:
+            label = QLabel("No folders are currently being watched.")
+            layout.addWidget(label)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        
+        dialog.exec()
 
     def _toggle_theme(self) -> None:
         from ui.styles import DARK_THEME, LIGHT_THEME
