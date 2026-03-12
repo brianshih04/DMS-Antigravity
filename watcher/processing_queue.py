@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from pathlib import Path
 
 from PySide6.QtCore import QThreadPool
 
@@ -69,6 +70,9 @@ class ProcessingQueue:
                 output_pdf = pdf_builder.build(path, result)
                 log.info("Searchable PDF: %s", output_pdf)
 
+                # Save OCR text to OCR_Result folder
+                self._save_ocr_text(path, result)
+
                 # Classify
                 features = extractor.extract(path, result)
                 file_router.route(path, features)
@@ -81,6 +85,33 @@ class ProcessingQueue:
             lambda err: self._on_error(path, err)
         )
         self._pool.start(worker)
+
+    def _save_ocr_text(self, image_path: str, result) -> None:
+        """Save OCR-extracted text to OCR_Result folder.
+        
+        Creates the OCR_Result subfolder under the configured output directory
+        and saves the text file with the same name as the original file but
+        with .txt extension.
+        """
+        cfg = Config.instance()
+        output_base_dir = cfg.get("output.ocr_output_dir", "./processed")
+        
+        # Create OCR_Result subfolder
+        ocr_result_dir = Path(output_base_dir) / "OCR_Result"
+        ocr_result_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate output filename with .txt extension
+        original_name = Path(image_path).stem
+        output_file = ocr_result_dir / f"{original_name}.txt"
+        
+        # Write OCR text to file
+        try:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(result.full_text)
+            log.info("OCR text saved to: %s", output_file)
+            self._signals.status_message.emit(f"OCR text saved: {output_file.name}")
+        except IOError as exc:
+            log.error("Failed to save OCR text to %s: %s", output_file, exc)
 
     def _on_error(self, path: str, err: tuple) -> None:
         _, exc_value, tb = err

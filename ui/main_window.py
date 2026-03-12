@@ -120,6 +120,11 @@ class MainWindow(QMainWindow):
 
         tb.addSeparator()
 
+        act_ocr_output = QAction("📂 OCR Output Folder", self)
+        act_ocr_output.setToolTip("Select folder for OCR text output")
+        act_ocr_output.triggered.connect(self._select_ocr_output_folder)
+        tb.addAction(act_ocr_output)
+
         act_settings = QAction("⚙ Settings", self)
         act_settings.setToolTip("Open settings")
         act_settings.triggered.connect(self._open_settings)
@@ -191,6 +196,19 @@ class MainWindow(QMainWindow):
             path = model.data(idx, Qt.ItemDataRole.UserRole)
             if path:
                 self._signals.file_ready.emit(path)
+
+    def _select_ocr_output_folder(self) -> None:
+        """Prompt user to select OCR output folder."""
+        from PySide6.QtWidgets import QFileDialog
+        
+        current_dir = self._cfg.get("output.ocr_output_dir", "./processed")
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select OCR Output Folder", current_dir
+        )
+        if folder:
+            self._cfg.set("output.ocr_output_dir", folder)
+            self._signals.status_message.emit(f"OCR output folder set to: {folder}")
+            log.info("OCR output folder updated to: %s", folder)
 
     def _open_settings(self) -> None:
         cfg_path = Path(__file__).parent.parent / "config" / "settings.yaml"

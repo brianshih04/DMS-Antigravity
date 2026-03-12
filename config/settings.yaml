@@ -51,3 +51,4 @@ ui:
 output:
   searchable_pdf_suffix: "_searchable"
   default_output_dir: "./processed"
+  ocr_output_dir: "./processed"  # OCR text files will be saved to OCR_Result subfolder under this directory
