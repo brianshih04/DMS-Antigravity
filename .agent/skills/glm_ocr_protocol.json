@@ -4,11 +4,11 @@
   "description": "Zhipu AI GLM-OCR (0.9B) Cloud API communication protocol and local inference JSON contract.",
   "cloud_api": {
     "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    "model_id": "glm-4v",
+    "model_id": "glm-4v-plus",
     "auth_header": "Authorization: Bearer {api_key}",
     "content_type": "application/json",
     "request_schema": {
-      "model": "glm-4v",
+      "model": "glm-4v-plus",
       "messages": [
         {
           "role": "user",
@@ -27,7 +27,10 @@
         }
       ],
       "max_tokens": 4096,
-      "temperature": 0.1
+      "temperature": 0.1,
+      "thinking": {
+        "type": "enabled"
+      }
     },
     "response_schema": {
       "id": "string",

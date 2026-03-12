@@ -83,7 +83,8 @@ class ZhipuCloudEngine(BaseOCREngine):
 
         b64, img_w, img_h = _encode_image(image_path, self._max_side, self._quality)
 
-        payload = {
+        from typing import Any
+        payload: dict[str, Any] = {
             "model": self._model,
             "messages": [
                 {
@@ -97,9 +98,14 @@ class ZhipuCloudEngine(BaseOCREngine):
                     ],
                 }
             ],
-            "max_tokens": 4096,
-            "temperature": 0.1,
+            "max_tokens": int(Config.instance().get("ocr.max_tokens", 4096)),
+            "temperature": float(Config.instance().get("ocr.temperature", 0.1)),
         }
+        
+        # Inject reasoning/thinking parameter for modern GLM models if enabled
+        thinking_enabled = Config.instance().get("ocr.thinking_enabled", False)
+        if thinking_enabled and self._model.lower().startswith("glm-4"):
+            payload["thinking"] = {"type": "enabled"}
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
