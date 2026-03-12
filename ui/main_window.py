@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QToolBar,
     QWidget,
+    QComboBox,
 )
 
 from core.config import Config
@@ -115,6 +116,22 @@ class MainWindow(QMainWindow):
         act_settings.triggered.connect(self._open_settings)
         tb.addAction(act_settings)
 
+        tb.addSeparator()
+        
+        # Engine selector
+        self._engine_combo = QComboBox(self)
+        self._engine_combo.setToolTip("Select OCR Engine Strategy")
+        self._engine_combo.addItems(["🪄 Auto (Prefer Local)", "☁️ Cloud (Zhipu API)", "🖥️ Local (Hugging Face)"])
+        
+        # Set current mapped value
+        current_mode = self._cfg.get("ocr.mode", "auto").lower()
+        mode_idx = {"auto": 0, "cloud": 1, "local": 2}.get(current_mode, 0)
+        self._engine_combo.setCurrentIndex(mode_idx)
+        self._engine_combo.currentIndexChanged.connect(self._on_engine_changed)
+        
+        tb.addWidget(QLabel(" Engine: ", self))
+        tb.addWidget(self._engine_combo)
+
         # Theme toggle
         tb.addSeparator()
         act_theme = QAction("◑ Theme", self)
@@ -173,6 +190,14 @@ class MainWindow(QMainWindow):
             os.startfile(str(cfg_path))
         else:
             subprocess.Popen(["xdg-open", str(cfg_path)])
+
+    def _on_engine_changed(self, idx: int) -> None:
+        """Update the configuration dynamically from the UI combo box."""
+        mode_map = {0: "auto", 1: "cloud", 2: "local"}
+        new_mode = mode_map.get(idx, "auto")
+        self._cfg.set("ocr.mode", new_mode)
+        log.info(f"UI changed OCR engine mode to: {new_mode}")
+        self._signals.status_message.emit(f"OCR Mode set to: {new_mode.upper()}")
 
     def _toggle_theme(self) -> None:
         from ui.styles import DARK_THEME, LIGHT_THEME
